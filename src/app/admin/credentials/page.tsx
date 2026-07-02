@@ -160,7 +160,7 @@ export default function CredentialsPage() {
     return () => clearTimeout(timer);
   }, [formData.employee_id, formData.id, isEditing, employees]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Block submission if the typed Employee ID is already in use by someone else
@@ -172,10 +172,10 @@ export default function CredentialsPage() {
     try {
       if (isEditing) {
         const updatePayload: Record<string, any> = {
-          name: formData.name,
-          email: formData.email,
+          name: formData.name.trim(),
+          email: formData.email.trim(),
           role: formData.role,
-          dob: formData.dob,
+          dob: formData.dob ? formData.dob : null, // Safely convert empty string to null for Postgres
         };
 
         // Only include employee_id in the update if it was actually changed,
@@ -196,13 +196,11 @@ export default function CredentialsPage() {
         const complexPassword = generateComplexPassword(formData.name);
         const { error } = await supabase.from("employee_credentials").insert([
           {
-            name: formData.name,
-            email: formData.email,
+            name: formData.name.trim(),
+            email: formData.email.trim(),
             role: formData.role,
             auto_pass: complexPassword,
-            dob: formData.dob,
-            // employee_id intentionally omitted on create — the DB trigger
-            // (generate_employee_id) auto-assigns it on insert.
+            dob: formData.dob ? formData.dob : null, // Safely handle blank dates on insert
           },
         ]);
         if (error) throw error;
@@ -210,10 +208,18 @@ export default function CredentialsPage() {
       setIsModalOpen(false);
       fetchEmployees();
     } catch (err: any) {
-      console.error("Error handling credential submission:", err);
+      // Deconstruct non-enumerable properties explicitly to expose the true root cause
+      console.error("Error handling credential submission:", {
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint
+      });
+      
       if (err?.code === "23505") {
-        // Postgres unique_violation, as a last-resort safety net
         alert("That Employee ID is already in use. Please choose a different one.");
+      } else {
+        alert(`Submission Failed: ${err?.message || "Check network database tables configuration."}`);
       }
     } finally {
       setIsSubmitting(false);
@@ -367,14 +373,14 @@ export default function CredentialsPage() {
 
               <button
                 onClick={() => {
-                  setFormData({
-                    id: "",
-                    name: "",
-                    email: "",
-                    role: roles[0]?.role_name ? `${roles[0].role_name} (${roles[0].role_code})` : "",
-                    dob: "",
-                    employee_id: "",
-                  });
+              setFormData({
+  id: "",
+  name: "",
+  email: "",
+  role: roles[0]?.role_name ? `${roles[0].role_name} (${roles[0].role_code})` : "",
+  dob: "",
+  employee_id: "", // <-- Stays as an empty string ""
+});
                   setEmpIdStatus("idle");
                   setIsEditing(false);
                   setIsModalOpen(true);
