@@ -12,6 +12,7 @@ interface AttendanceRecord {
   start_time: string;
   end_time?: string;
   total_work_seconds: number;
+  break_seconds?: number;
 }
 
 interface HolidayRecord {
@@ -53,6 +54,10 @@ export default function AttendancePage() {
   const [workingOn, setWorkingOn] = useState("");
   const [attendanceId, setAttendanceId] = useState<string | null>(null);
 
+  // NEW: tracks cumulative paused/break duration in seconds, always subtracted
+  // from (now - start_time) to get the true live work timer.
+  const breakSecondsRef = useRef(0);
+
   // history holds only PAST completed/finalized records — never the active one
   const [history, setHistory] = useState<AttendanceRecord[]>([]);
   const [holidays, setHolidays] = useState<HolidayRecord[]>([]);
@@ -92,33 +97,42 @@ export default function AttendancePage() {
       latestRecord &&
       (latestRecord.status === "active" || latestRecord.status === "paused");
 
-    // 3. Recover time drift if active
-    let recoveredTime = 0;
-    if (latestRecord && latestRecord.status === "active") {
-      const lastSaved = new Date(latestRecord.updated_at).getTime();
-      const secondsPassedWhileOffline = (Date.now() - lastSaved) / 1000;
-      if (secondsPassedWhileOffline < 3600) {
-        recoveredTime = secondsPassedWhileOffline;
-      }
-    }
-
-    // 4. Hydrate live-session state
+    // 3. Hydrate live-session state
     if (isLiveSession) {
       setAttendanceId(latestRecord.id);
       setStatus(latestRecord.status);
       setWorkingOn(latestRecord.working_on);
       setStartTime(latestRecord.start_time);
-      setTimer(latestRecord.total_work_seconds + recoveredTime);
-      timerRef.current = latestRecord.total_work_seconds + recoveredTime;
+      breakSecondsRef.current = latestRecord.break_seconds || 0;
       setLastSavedTask(latestRecord.working_on);
-      // Restore banner if already past 8h
-      if (latestRecord.total_work_seconds + recoveredTime >= TARGET_SECONDS) {
-        setShowShiftBanner(true);
-        shiftCompleteNotifiedRef.current = true;
+
+      if (latestRecord.status === "active") {
+        // Live calculation: total elapsed since start, minus all break time.
+        // This is always correct on reload/reconnect — no drift-recovery hacks needed.
+        const startMs = new Date(latestRecord.start_time).getTime();
+        const liveSeconds = Math.floor((Date.now() - startMs) / 1000) - breakSecondsRef.current;
+        const safeSeconds = Math.max(0, liveSeconds);
+        setTimer(safeSeconds);
+        timerRef.current = safeSeconds;
+
+        if (safeSeconds >= TARGET_SECONDS) {
+          setShowShiftBanner(true);
+          shiftCompleteNotifiedRef.current = true;
+        }
+      } else {
+        // Paused: timer is frozen at whatever was last saved.
+        const frozen = latestRecord.total_work_seconds || 0;
+        setTimer(frozen);
+        timerRef.current = frozen;
+
+        if (frozen >= TARGET_SECONDS) {
+          setShowShiftBanner(true);
+          shiftCompleteNotifiedRef.current = true;
+        }
       }
     }
 
-    // 5. Fetch history — ALWAYS exclude the live session row so today never
+    // 4. Fetch history — ALWAYS exclude the live session row so today never
     //    appears as a completed card while actively working
     let historyQuery = supabase
       .from("attendance")
@@ -134,7 +148,7 @@ export default function AttendancePage() {
     const { data: pastData } = await historyQuery;
     setHistory(pastData || []);
 
-    // 6. Fetch company holidays for this month
+    // 5. Fetch company holidays for this month
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
@@ -162,17 +176,19 @@ export default function AttendancePage() {
     const interval = setInterval(() => {
       const now = Date.now();
       const start = new Date(startTime).getTime();
-      const diffInSeconds = Math.floor((now - start) / 1000);
+      // Subtract accumulated break time so pauses never count as work.
+      const rawSeconds = Math.floor((now - start) / 1000) - breakSecondsRef.current;
+      const diffInSeconds = Math.max(0, rawSeconds);
 
       setTimer(diffInSeconds);
       timerRef.current = diffInSeconds;
 
       if (diffInSeconds >= HARD_LIMIT_SECONDS) {
         executeStop(attendanceId!);
-        sendEmailNotification("Shift auto-closed after 9 hours.");
+        sendEmailNotification("9h", diffInSeconds);
       } else if (diffInSeconds >= TARGET_SECONDS && !shiftCompleteNotifiedRef.current) {
         setShowShiftBanner(true);
-        sendEmailNotification("You have reached 8 hours. Please wrap up soon.");
+        sendEmailNotification("8h", diffInSeconds);
         shiftCompleteNotifiedRef.current = true;
       }
     }, 1000);
@@ -182,13 +198,84 @@ export default function AttendancePage() {
   }, [status, startTime, attendanceId]);
 
   // ─── Email helper ─────────────────────────────────────────────────────────
-  const sendEmailNotification = async (message: string) => {
+  const sendEmailNotification = async (
+    type: "8h" | "9h",
+    workedSeconds: number
+  ) => {
     const userEmail = lsGet("user_email");
+    const userName = lsGet("user_name") || "there";
+
+    const isHardLimit = type === "9h";
+    const subject = isHardLimit
+      ? "⏱️ Your shift was auto-closed after 9 hours"
+      : "✅ You've reached your 8-hour target";
+
+    const heading = isHardLimit
+      ? "Shift Auto-Closed"
+      : "8-Hour Target Reached";
+
+    const bodyLine = isHardLimit
+      ? "Your session hit the 9-hour hard limit and was automatically closed to keep your timesheet accurate."
+      : "Great work! You've hit your 8-hour target. Your timer is still running — wrap up and click Stop Work whenever you're ready.";
+
+    const html = `
+  <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f4f4f5; padding:32px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #e4e4e7;">
+      <tr>
+        <td style="background:${isHardLimit ? "#e11d48" : "#059669"}; padding:24px 32px;">
+          <p style="margin:0; color:#ffffff; font-size:13px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; opacity:0.85;">
+            Workspace Management
+          </p>
+          <h1 style="margin:8px 0 0; color:#ffffff; font-size:20px; font-weight:800;">
+            ${heading}
+          </h1>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:28px 32px 8px;">
+          <p style="margin:0 0 16px; color:#18181b; font-size:14px; line-height:1.6;">
+            Hi ${userName},
+          </p>
+          <p style="margin:0 0 20px; color:#3f3f46; font-size:14px; line-height:1.6;">
+            ${bodyLine}
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5; border-radius:12px; margin-bottom:20px;">
+            <tr>
+              <td style="padding:16px 20px;">
+                <p style="margin:0 0 4px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#71717a;">
+                  Time Logged
+                </p>
+                <p style="margin:0; font-size:24px; font-weight:800; font-family: 'Courier New', monospace; color:#18181b;">
+                  ${formatTime(workedSeconds)}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 32px 28px;">
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/attendance"
+             style="display:inline-block; background:#18181b; color:#ffffff; text-decoration:none; font-weight:700; font-size:13px; padding:12px 24px; border-radius:10px;">
+            View Timesheet →
+          </a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 32px; background:#fafafa; border-top:1px solid #f0f0f0;">
+          <p style="margin:0; font-size:11px; color:#a1a1aa;">
+            Automated notification from Workspace Management. You're receiving this because you're clocked in.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+
     try {
       await fetch("/api/send-attendance-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, email: userEmail }),
+        body: JSON.stringify({ email: userEmail, subject, html }),
       });
     } catch (e) {
       console.error("Email failed:", e);
@@ -203,6 +290,8 @@ export default function AttendancePage() {
         status: "completed",
         end_time: new Date().toISOString(),
         total_work_seconds: Math.round(timerRef.current),
+        break_seconds: Math.round(breakSecondsRef.current),
+        last_updated: new Date().toISOString(),
       })
       .eq("id", id);
 
@@ -212,6 +301,7 @@ export default function AttendancePage() {
       setAttendanceId(null);
       setTimer(0);
       timerRef.current = 0;
+      breakSecondsRef.current = 0;
       setStartTime(null);
       setWorkingOn("");
       setLastSavedTask("");
@@ -225,11 +315,11 @@ export default function AttendancePage() {
   };
 
   // ─── Manual start ──────────────────────────────────────────────────────────
-const handleStart = async () => {
-  if (new Date().getDay() === 0) return alert("Today is Sunday — rest day. You cannot start a work session.");
-  const todayHoliday = holidays.find((h) => h.holiday_date === todayStr());
-  if (todayHoliday) return alert(`Today is a holiday: ${todayHoliday.title}. You cannot start a work session.`);
-  if (!workingOn.trim()) return alert("Please clarify what task you are initiating!");
+  const handleStart = async () => {
+    if (new Date().getDay() === 0) return alert("Today is Sunday — rest day. You cannot start a work session.");
+    const todayHoliday = holidays.find((h) => h.holiday_date === todayStr());
+    if (todayHoliday) return alert(`Today is a holiday: ${todayHoliday.title}. You cannot start a work session.`);
+    if (!workingOn.trim()) return alert("Please clarify what task you are initiating!");
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
@@ -245,6 +335,8 @@ const handleStart = async () => {
         status: "active",
         date: now.split("T")[0],
         total_work_seconds: 0,
+        break_seconds: 0,
+        last_updated: now,
       }])
       .select()
       .single();
@@ -255,6 +347,7 @@ const handleStart = async () => {
       setStatus("active");
       setTimer(0);
       timerRef.current = 0;
+      breakSecondsRef.current = 0;
       setLastSavedTask(workingOn);
       shiftCompleteNotifiedRef.current = false;
       setShowShiftBanner(false);
@@ -265,15 +358,59 @@ const handleStart = async () => {
   // ─── Pause / Resume ────────────────────────────────────────────────────────
   const handleTogglePause = async () => {
     if (!attendanceId) return;
-    const newStatus = status === "active" ? "paused" : "active";
-    setStatus(newStatus);
 
-    await supabase
-      .from("attendance")
-      .update({ total_work_seconds: Math.round(timerRef.current), status: newStatus })
-      .eq("id", attendanceId);
+    if (status === "active") {
+      // ── Going ACTIVE -> PAUSED ──
+      // Freeze the current live work total and stamp when the break started.
+      const currentWork = Math.round(timerRef.current);
+      const now = new Date().toISOString();
 
-    lsSet(`attendance_timer_${attendanceId}`, JSON.stringify({ time: timerRef.current, lastTick: Date.now() }));
+      await supabase
+        .from("attendance")
+        .update({
+          status: "paused",
+          total_work_seconds: currentWork,
+          last_updated: now,
+        })
+        .eq("id", attendanceId);
+
+      setStatus("paused");
+      setTimer(currentWork);
+      timerRef.current = currentWork;
+      lsSet(`attendance_timer_${attendanceId}`, JSON.stringify({ time: currentWork, lastTick: Date.now() }));
+    } else {
+      // ── Going PAUSED -> ACTIVE ──
+      // Fetch the record fresh so the break duration is based on the real
+      // DB timestamp (accurate even if the browser was closed during the break).
+      const { data: freshRecord } = await supabase
+        .from("attendance")
+        .select("last_updated, break_seconds")
+        .eq("id", attendanceId)
+        .single();
+
+      const pausedAtMs = freshRecord?.last_updated
+        ? new Date(freshRecord.last_updated).getTime()
+        : Date.now();
+      const breakDuration = Math.max(0, Math.floor((Date.now() - pausedAtMs) / 1000));
+      const newBreakSeconds = (freshRecord?.break_seconds || 0) + breakDuration;
+
+      const now = new Date().toISOString();
+
+      await supabase
+        .from("attendance")
+        .update({
+          status: "active",
+          break_seconds: newBreakSeconds,
+          last_updated: now,
+        })
+        .eq("id", attendanceId);
+
+      breakSecondsRef.current = newBreakSeconds;
+      setStatus("active");
+      // startTime stays the same (original clock-in) — the ticking effect
+      // now correctly subtracts the updated breakSecondsRef.current.
+      lsSet(`attendance_timer_${attendanceId}`, JSON.stringify({ time: timerRef.current, lastTick: Date.now() }));
+    }
   };
 
   // ─── Manual stop ──────────────────────────────────────────────────────────
@@ -537,36 +674,36 @@ const handleStart = async () => {
               </div>
             )}
 
-   {status === "idle" && (() => {
-  const todayHoliday = holidays.find((h) => h.holiday_date === todayStr());
-  const isTodaySunday = new Date().getDay() === 0;
+            {status === "idle" && (() => {
+              const todayHoliday = holidays.find((h) => h.holiday_date === todayStr());
+              const isTodaySunday = new Date().getDay() === 0;
 
-  if (isTodaySunday) {
-    return (
-      <div className={`p-4 rounded-xl text-center border border-dashed ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-400" : "bg-zinc-50 border-zinc-300 text-zinc-500"}`}>
-        <p className="text-lg mb-1">😴</p>
-        <p className="font-black text-sm">Today is Sunday</p>
-        <p className={`text-xs font-semibold mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>Rest day — work sessions are not permitted on Sundays.</p>
-      </div>
-    );
-  }
+              if (isTodaySunday) {
+                return (
+                  <div className={`p-4 rounded-xl text-center border border-dashed ${darkMode ? "bg-zinc-800 border-zinc-700 text-zinc-400" : "bg-zinc-50 border-zinc-300 text-zinc-500"}`}>
+                    <p className="text-lg mb-1">😴</p>
+                    <p className="font-black text-sm">Today is Sunday</p>
+                    <p className={`text-xs font-semibold mt-1 ${darkMode ? "text-zinc-500" : "text-zinc-400"}`}>Rest day — work sessions are not permitted on Sundays.</p>
+                  </div>
+                );
+              }
 
-  if (todayHoliday) {
-    return (
-      <div className={`p-4 rounded-xl text-center border border-dashed ${darkMode ? "bg-violet-950/20 border-violet-800 text-violet-300" : "bg-violet-50 border-violet-300 text-violet-700"}`}>
-        <p className="text-lg mb-1">🎉</p>
-        <p className="font-black text-sm">Today is a Holiday!</p>
-        <p className={`text-xs font-semibold mt-1 ${darkMode ? "text-violet-400" : "text-violet-500"}`}>{todayHoliday.title} — You cannot start a work session today.</p>
-      </div>
-    );
-  }
+              if (todayHoliday) {
+                return (
+                  <div className={`p-4 rounded-xl text-center border border-dashed ${darkMode ? "bg-violet-950/20 border-violet-800 text-violet-300" : "bg-violet-50 border-violet-300 text-violet-700"}`}>
+                    <p className="text-lg mb-1">🎉</p>
+                    <p className="font-black text-sm">Today is a Holiday!</p>
+                    <p className={`text-xs font-semibold mt-1 ${darkMode ? "text-violet-400" : "text-violet-500"}`}>{todayHoliday.title} — You cannot start a work session today.</p>
+                  </div>
+                );
+              }
 
-  return (
-    <button onClick={handleStart} className="w-full py-3 md:py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl transition-all tracking-wide text-sm shadow-md">
-      START WORK
-    </button>
-  );
-})()}
+              return (
+                <button onClick={handleStart} className="w-full py-3 md:py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl transition-all tracking-wide text-sm shadow-md">
+                  START WORK
+                </button>
+              );
+            })()}
 
             {(status === "active" || status === "paused") && (
               <div className="grid grid-cols-2 gap-3">

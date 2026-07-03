@@ -1,26 +1,25 @@
-import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 
-export async function POST(req: Request) {
-  const { message, email } = await req.json();
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.EMAIL_APP_PASSWORD,
-    },
-  });
-
+export async function POST(req: NextRequest) {
   try {
-    await transporter.sendMail({
-      from: '"Attendance System" <no-reply@yourcompany.com>',
+    const { email, subject, html } = await req.json();
+    if (!email) {
+      return NextResponse.json({ error: "No recipient email" }, { status: 400 });
+    }
+
+    await resend.emails.send({
+      from: "Attendance <attendance@yourdomain.com>",
       to: email,
-      subject: "Attendance Notification",
-      text: message,
+      subject,
+      html,
     });
+
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+  } catch (err) {
+    console.error("send-attendance-email error:", err);
+    return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
 }
