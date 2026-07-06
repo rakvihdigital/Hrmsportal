@@ -197,7 +197,7 @@ export default function AttendancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, startTime, attendanceId]);
 
-  // ─── Email helper ─────────────────────────────────────────────────────────
+// ─── Email helper ─────────────────────────────────────────────────────────
   const sendEmailNotification = async (
     type: "8h" | "9h",
     workedSeconds: number
@@ -207,24 +207,25 @@ export default function AttendancePage() {
 
     const isHardLimit = type === "9h";
     const subject = isHardLimit
-      ? "⏱️ Your shift was auto-closed after 9 hours"
-      : "✅ You've reached your 8-hour target";
+      ? "Your shift was auto-closed after 9 hours"
+      : "You've reached your 8-hour target";
 
     const heading = isHardLimit
       ? "Shift Auto-Closed"
       : "8-Hour Target Reached";
 
+    // Enhanced and more detailed body text
     const bodyLine = isHardLimit
-      ? "Your session hit the 9-hour hard limit and was automatically closed to keep your timesheet accurate."
-      : "Great work! You've hit your 8-hour target. Your timer is still running — wrap up and click Stop Work whenever you're ready.";
+      ? "Your active attendance session has reached the maximum 9-hour hard limit. To ensure compliance and keep your daily timesheet accurate, your shift has been automatically finalized and logged."
+      : "Great job on your progress today! You have successfully completed your 8-hour target milestone. Your work session is still actively running — please ensure you wrap up your pending tasks and click 'Stop Work' whenever you are ready to check out.";
 
     const html = `
   <div style="font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f4f4f5; padding:32px 0;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #e4e4e7;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; border:1px solid #e4e4e7; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
       <tr>
         <td style="background:${isHardLimit ? "#e11d48" : "#059669"}; padding:24px 32px;">
           <p style="margin:0; color:#ffffff; font-size:13px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; opacity:0.85;">
-            Workspace Management
+            Rakvih Attendance Tracking
           </p>
           <h1 style="margin:8px 0 0; color:#ffffff; font-size:20px; font-weight:800;">
             ${heading}
@@ -232,39 +233,34 @@ export default function AttendancePage() {
         </td>
       </tr>
       <tr>
-        <td style="padding:28px 32px 8px;">
-          <p style="margin:0 0 16px; color:#18181b; font-size:14px; line-height:1.6;">
+        <td style="padding:28px 32px 28px;">
+          <p style="margin:0 0 16px; color:#18181b; font-size:14px; font-weight:600;">
             Hi ${userName},
           </p>
-          <p style="margin:0 0 20px; color:#3f3f46; font-size:14px; line-height:1.6;">
+          <p style="margin:0 0 24px; color:#3f3f46; font-size:14px; line-height:1.6;">
             ${bodyLine}
           </p>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5; border-radius:12px; margin-bottom:20px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5; border-radius:12px;">
             <tr>
               <td style="padding:16px 20px;">
                 <p style="margin:0 0 4px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#71717a;">
-                  Time Logged
+                  Total Logged Time
                 </p>
-                <p style="margin:0; font-size:24px; font-weight:800; font-family: 'Courier New', monospace; color:#18181b;">
+                <p style="margin:0; font-size:24px; font-weight:800; font-family: 'Courier New', monospace; color:#18181b; letter-spacing: 0.5px;">
                   ${formatTime(workedSeconds)}
                 </p>
               </td>
             </tr>
           </table>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:0 32px 28px;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/attendance"
-             style="display:inline-block; background:#18181b; color:#ffffff; text-decoration:none; font-weight:700; font-size:13px; padding:12px 24px; border-radius:10px;">
-            View Timesheet →
-          </a>
+          <p style="margin:20px 0 0; color:#71717a; font-size:13px; line-height:1.5;">
+            You can view your complete breakdown, past logs, and break durations directly on your portal dashboard.
+          </p>
         </td>
       </tr>
       <tr>
         <td style="padding:16px 32px; background:#fafafa; border-top:1px solid #f0f0f0;">
           <p style="margin:0; font-size:11px; color:#a1a1aa;">
-            Automated notification from Workspace Management. You're receiving this because you're clocked in.
+            Automated operational alert from Rakvih Attendance Tracking portal.
           </p>
         </td>
       </tr>
@@ -278,10 +274,9 @@ export default function AttendancePage() {
         body: JSON.stringify({ email: userEmail, subject, html }),
       });
     } catch (e) {
-      console.error("Email failed:", e);
+      console.error("Email failed to dispatch:", e);
     }
   };
-
   // ─── Shared stop logic ────────────────────────────────────────────────────
   const executeStop = async (id: string) => {
     const { error } = await supabase
