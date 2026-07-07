@@ -164,7 +164,7 @@ export async function GET(request: Request) {
         html: employeeHtmlBody,
       });
 
-      // Dispatch Email 2 to Admin (rakvihdigital@gmail.com)
+      // Dispatch Email 2 to Admin (vijay.rakvih@gmail.com)
       await transporter.sendMail({
         from: `"Rakvih Operations" <${process.env.SMTP_USER}>`,
         to: process.env.SMTP_USER, 

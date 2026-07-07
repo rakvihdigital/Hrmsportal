@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Target destination email parameters are missing.' }, { status: 400 });
         }
 
-        const senderEmail = 'rakvihdigital@gmail.com';
-        const cleanAppPassword = 'dzxbbwypbyrfeiwp';
+        const senderEmail = 'vijay.rakvih@gmail.com';
+        const cleanAppPassword = 'nhragujdxplpbkak';
 
         // 1. Initialize Nodemailer Configuration
         const transporter = nodemailer.createTransport({
