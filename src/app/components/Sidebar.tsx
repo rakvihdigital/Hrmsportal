@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "@/app/providers/ThemeProvider"; 
+import { useTheme } from "@/app/providers/ThemeProvider";
 
 // Paths that must NEVER be granted to a sub-admin, no matter what is
 // stored in their allowed_tabs. Sub-admin management is a full-admin-only
@@ -15,7 +15,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { darkMode, toggleTheme } = useTheme(); 
+  const { darkMode, toggleTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
 
   // --- CURRENT USER CONTEXT (read once on mount; logout/login navigates away anyway) ---
@@ -69,6 +69,15 @@ export default function Sidebar() {
       icon: (
         <svg className="w-5 h-5 transition-transform group-hover:scale-110 duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+      ),
+    },
+    {
+      path: "/admin/projects-list",
+      label: "Project Listing",
+      icon: (
+        <svg className="w-5 h-5 transition-transform group-hover:scale-110 duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
         </svg>
       ),
     },
@@ -183,11 +192,10 @@ export default function Sidebar() {
         key={item.path}
         href={item.path}
         onClick={() => setIsOpen(false)}
-        className={`h-11 flex items-center gap-3.5 px-4 rounded-xl font-bold text-sm transition-all duration-200 group relative shrink-0 ${
-          isActive
+        className={`h-11 flex items-center gap-3.5 px-4 rounded-xl font-bold text-sm transition-all duration-200 group relative shrink-0 ${isActive
             ? "text-slate-950 bg-[#ffcf0f] shadow-lg shadow-[#ffcf0f]/10"
             : `${darkMode ? "text-zinc-400 hover:text-white hover:bg-zinc-800/60" : "text-slate-400 hover:text-slate-900 hover:bg-slate-100"} hover:translate-x-1`
-        }`}
+          }`}
       >
         {isActive && (
           <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent pointer-events-none rounded-xl" />
@@ -208,9 +216,8 @@ export default function Sidebar() {
   return (
     <>
       {/* 1. MOBILE-FRIENDLY TOP HEADER BAR (Lowered z-index to z-20 so sidebar covers it) */}
-      <header className={`xl:hidden w-full h-16 fixed top-0 left-0 px-4 flex items-center justify-between z-20 transition-colors duration-300 border-b ${
-        darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
-      }`}>
+      <header className={`xl:hidden w-full h-16 fixed top-0 left-0 px-4 flex items-center justify-between z-20 transition-colors duration-300 border-b ${darkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-slate-200"
+        }`}>
         <div className="flex items-center gap-3">
           <div className="p-1 bg-white rounded-xl border border-slate-200 shadow-sm shrink-0">
             <Image src="/logo.jpg" alt="Rakvih Logo" width={28} height={28} className="object-contain" />
@@ -226,9 +233,8 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={toggleTheme}
-            className={`p-2 rounded-xl border transition-all duration-200 outline-none ${
-              darkMode ? "bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-700" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-            }`}
+            className={`p-2 rounded-xl border transition-all duration-200 outline-none ${darkMode ? "bg-zinc-800 border-zinc-700 text-amber-400 hover:bg-zinc-700" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+              }`}
             aria-label="Toggle Theme Mode"
           >
             {darkMode ? (
@@ -246,9 +252,8 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className={`p-2 rounded-xl border outline-none ${
-              darkMode ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-slate-50 text-slate-700 border-slate-200"
-            }`}
+            className={`p-2 rounded-xl border outline-none ${darkMode ? "bg-zinc-800 text-zinc-300 border-zinc-700" : "bg-slate-50 text-slate-700 border-slate-200"
+              }`}
             aria-label="Toggle Navigation Drawer"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -267,21 +272,18 @@ export default function Sidebar() {
       )}
 
       {/* 2. THE MAIN SIDEBAR COMPONENT CONTAINER (Raised to z-40 to go completely over the header) */}
-      <aside className={`w-[260px] border-r flex flex-col justify-between shrink-0 h-screen fixed top-0 left-0 p-4 shadow-xl z-40 transition-all duration-300 xl:translate-x-0 ${
-        isOpen ? "translate-x-0" : "-translate-x-full"
-      } ${
-        darkMode
+      <aside className={`w-[260px] border-r flex flex-col justify-between shrink-0 h-screen fixed top-0 left-0 p-4 shadow-xl z-40 transition-all duration-300 xl:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"
+        } ${darkMode
           ? "bg-zinc-900 border-zinc-800 text-zinc-100"
           : "bg-white border-slate-200 text-slate-900"
-      }`}>
+        }`}>
 
         <div className="flex flex-col h-[calc(100vh-140px)]">
           {/* BRAND LOGO AREA (Includes close button inside drawer for better mobile flow) */}
-          <div className={`p-4 mb-5 flex flex-col items-center text-center rounded-2xl border relative backdrop-blur-md shrink-0 transition-colors duration-300 ${
-            darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-slate-50 border-slate-200/60"
-          }`}>
+          <div className={`p-4 mb-5 flex flex-col items-center text-center rounded-2xl border relative backdrop-blur-md shrink-0 transition-colors duration-300 ${darkMode ? "bg-zinc-950/40 border-zinc-800/40" : "bg-slate-50 border-slate-200/60"
+            }`}>
             {/* Mobile-Only Close Icon Inside Drawer Header */}
-            <button 
+            <button
               onClick={() => setIsOpen(false)}
               className="xl:hidden absolute top-3 right-3 p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
@@ -301,17 +303,15 @@ export default function Sidebar() {
               />
             </div>
             <div className="leading-tight">
-              <span className={`text-[10px] uppercase font-bold tracking-widest mt-0.5 block ${
-                darkMode ? "text-[#d4dc9b]" : "text-[#505824]"
-              }`}>HRMS System</span>
+              <span className={`text-[10px] uppercase font-bold tracking-widest mt-0.5 block ${darkMode ? "text-[#d4dc9b]" : "text-[#505824]"
+                }`}>HRMS System</span>
             </div>
           </div>
 
           {/* SECTION HEADER */}
           <div className="px-3 mb-2 shrink-0">
-            <span className={`text-[10px] font-extrabold tracking-widest uppercase ${
-              darkMode ? "text-[#d4dc9b]/70" : "text-[#505824]"
-            }`}>
+            <span className={`text-[10px] font-extrabold tracking-widest uppercase ${darkMode ? "text-[#d4dc9b]/70" : "text-[#505824]"
+              }`}>
               {userRole === "sub-admin" ? "Sub-Admin Panel" : "Management Panel"}
             </span>
           </div>
@@ -323,14 +323,12 @@ export default function Sidebar() {
         </div>
 
         {/* FOOTER ACTIONS AREA */}
-        <div className={`flex flex-col gap-2.5 shrink-0 pt-2 border-t ${
-          darkMode ? "border-zinc-800" : "border-slate-100"
-        }`}>
+        <div className={`flex flex-col gap-2.5 shrink-0 pt-2 border-t ${darkMode ? "border-zinc-800" : "border-slate-100"
+          }`}>
 
           {/* PROFILE PANEL (now reflects logged-in user, including sub-admins) */}
-          <div className={`rounded-2xl p-3 shadow-inner transition-colors duration-300 border ${
-            darkMode ? "bg-zinc-950/60 border-zinc-800/80" : "bg-slate-50 border-slate-200"
-          }`}>
+          <div className={`rounded-2xl p-3 shadow-inner transition-colors duration-300 border ${darkMode ? "bg-zinc-950/60 border-zinc-800/80" : "bg-slate-50 border-slate-200"
+            }`}>
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-[#505824] text-white font-black text-xs flex items-center justify-center border border-[#505824]/30 shadow-md uppercase shrink-0">
                 {avatarLetter}
@@ -354,11 +352,10 @@ export default function Sidebar() {
             <button
               type="button"
               onClick={toggleTheme}
-              className={`h-11 flex-1 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all duration-200 border ${
-                darkMode 
-                  ? "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700" 
+              className={`h-11 flex-1 flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all duration-200 border ${darkMode
+                  ? "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700"
                   : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
-              }`}
+                }`}
               aria-label="Toggle theme viewport"
             >
               {darkMode ? (
@@ -382,11 +379,10 @@ export default function Sidebar() {
             <button
               onClick={handleLogout}
               type="button"
-              className={`h-11 w-11 flex items-center justify-center rounded-xl transition-all duration-200 border ${
-                darkMode
+              className={`h-11 w-11 flex items-center justify-center rounded-xl transition-all duration-200 border ${darkMode
                   ? "bg-rose-950/30 border-rose-900/50 text-rose-400 hover:bg-rose-900/40"
                   : "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-              }`}
+                }`}
               aria-label="Exit dashboard platform"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
